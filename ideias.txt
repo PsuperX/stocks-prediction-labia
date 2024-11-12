@@ -6,6 +6,8 @@ For each stock index, three types of variables are used as model inputs. The fir
 
 we evaluate the model’s performance from two dimensions: predictive accuracy and profitability. The predictive accuracy is evaluated by using three measurements: Mean absolute percentage error (MAPE), correlation coefficient (R) and Theil’s inequality coefficient (Theil U)
 
+https://en.wikipedia.org/wiki/List_of_S%26P_500_companies
+
 --------------------------------------------------------------------------------------------------------------------------
 
 #Amendoim was here
