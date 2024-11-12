@@ -7,3 +7,31 @@ For each stock index, three types of variables are used as model inputs. The fir
 we evaluate the model’s performance from two dimensions: predictive accuracy and profitability. The predictive accuracy is evaluated by using three measurements: Mean absolute percentage error (MAPE), correlation coefficient (R) and Theil’s inequality coefficient (Theil U)
 
 
+
+--------------------------------------------------------------------------------------------
+--------------------------------BOB-was-here------------------------------------------------
+--------------------------------------------------------------------------------------------
+LG08->
+    The multiobjective hybrid genetic algorithm:  is a specific type of computational approach that uses 
+                                                    genetic algorithms—a type of algorithm inspired by 
+                                                    natural selection.
+                                                    The "multiobjective" part indicates that it tries to optimize
+                                                    multiple goals at once, while "hybrid" implies it combines 
+                                                    different methods or techniques to improve its performance.
+
+                                                  mohGA aims to maintain a diverse set of solutions, 
+                                                  offering different trade-offs across objectives. 
+                                                  This way, decision-makers can choose the best solution 
+                                                  based on their priorities
+
+                                                  combines genetic algorithms with other optimization techniques
+
+
+                                                  optimizing for multiple goals simultaneously, 
+                                                  such as maximizing returns, 
+                                                  minimizing risk, 
+                                                  and improving prediction accuracy
+
+
+
+    particularly useful for fields that require strategic resource planning and optimization
