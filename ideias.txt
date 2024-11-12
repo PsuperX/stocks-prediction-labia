@@ -10,6 +10,13 @@ https://en.wikipedia.org/wiki/List_of_S%26P_500_companies
 
 --------------------------------------------------------------------------------------------------------------------------
 
+# Ideia do pedro q talvez faça sentido:
+em vez de prever o open e close prices prever a variação (open - close)
+
+chat gpt aprova
+
+--------------------------------------------------------------------------------------------------------------------------
+
 #Amendoim was here
 
 https://www.bauer.uh.edu/spirrong/Monte_Carlo_Methods_In_Financial_Enginee.pdf
