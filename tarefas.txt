@@ -1,0 +1,7 @@
+[] Reading Papers
+    [] 1st - Pedro
+    [] 2nd - Inês
+    [] 3rd - Dani 
+    [] 4th - Constança
+
+[x] Dataset Download - Pedro
