@@ -1,4 +1,54 @@
 
+# Decisoes:
+
+## Quais stocks usar?
+- Filtrar ações com base em critérios como liquidez, desempenho histórico ou previsões de retorno.
+- eliminar ações com baixa liquidez ou alto ruído
+- Limitar o número de ações (50 ou 100 ativos deve ser bom)
+
+## Como lidar com anomalias (tipo covid)
+
+## Que features usar?
+- usar a diferença de preços de cada dia?
+- wavelet transform
+- rolling avg (para a tendencia e talvez racio com o close price) em varias janelas - n vi em nenhum paper mas parece fazer sentido
+- vamos considerar dividendos no cálculo do retorno total do portfólio? Se não, acho que podemos excluir "Dividends"
+- será que "Stock Splits" é relevante? Usar os splits como um possível indicador, como data de referência para mudanças no comportamento do preço
+- macroeconomic variables
+- preço do dolar/euro/etc
+
+
+## Como vai ser a previsao?
+- que modelos usar? Random forest regressor VS SVR VS XGBoost VS LSTM VS etc - lembrar de nao usar 2 algoritmos em arvore
+- em vez de prever o open e close prices prever a variação (open - close) - isto foi invensão do Pedro (escrevi mais em baixo)
+- classificação (se sobe ou desce) VS regressão (quanto sobe e desce)
+- prever varios dias de uma vez ou só um dia à frente (um dia parece melhor?)
+- para um dia de cada vez o dia 2 pode usar o verdadeiro valor do dia 1? (acho que não)
+
+## Métricas de Avaliação previsão:
+- Mean absolute percentage error (MAPE)
+- correlation coefficient (R)
+- Theil’s inequality coefficient (Theil U)
+
+
+## Otimização do portfolio
+- monte-carlo VS genetico VS Modelo de Markowitz
+- Markowitz deve ser o mais simples mas não é "machine learning" 
+
+
+### Para Modelo de Markowitz
+- Aplique métodos robustos para estimativa de entradas, como shrinkage ou otimização bayesiana
+- Em vez de minimizar apenas o risco (variância), utilize métricas como o Sharpe Ratio (retorno ajustado ao risco) para balancear melhor risco e retorno em horizontes curtos
+- Considere incluir ativos com alta liquidez ou estratégias de hedge para proteger o portfólio contra movimentos bruscos no curto prazo
+- Limite a alocação máxima em qualquer ativo a 10% para evitar concentração excessiva
+
+## Métricas de Avaliação portfolio
+- Sharpe Ratio: Retorno ajustado ao risco.
+- Cumulative Return: Retorno acumulado ao longo do tempo.
+- Drawdown: Perda máxima observada
+
+-------------------------------------------------------------------------------------------------------------------------
+
 https://pmc.ncbi.nlm.nih.gov/articles/PMC5510866/
 WT(wavelet) is considered to fix the noise feature of financial time series. It is a widely used technique for filtering and mining single-dimensional signals [23–25].
 
@@ -14,6 +64,17 @@ https://en.wikipedia.org/wiki/List_of_S%26P_500_companies
 em vez de prever o open e close prices prever a variação (open - close)
 
 chat gpt aprova
+
+Log Returns:
+- Instead of raw differences, you could use the log return: log⁡(P_t/P_(t−1)).
+- Advantages: Log returns are scale-independent, and their distribution is closer to normal, which is useful for many statistical and machine learning models.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Para otimização do portfolio:
+- Mean-Variance Optimization (Modelo de Markowitz) - n sei se é considerado IA
+TODO: heurísticas de busca para restrições adicionais
+
 
 --------------------------------------------------------------------------------------------------------------------------
 
