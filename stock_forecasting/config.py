@@ -38,6 +38,8 @@ CONFIG = {
         "^N225", # Nikkei_225
         "^GSPC", # S&P500
         "DJIA",
+        
+        "DX-Y.NYB", # US dollari ndex
     ],
 }
 

@@ -1,29 +1,92 @@
 from pathlib import Path
+from typing import Mapping, Sequence
+from sklearn.discriminant_analysis import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.datasets import make_regression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import BaseCrossValidator, RandomizedSearchCV
+from stock_forecasting.features import WaveletTransformer
+from stock_forecasting.modeling.train import CustomTimeSeriesSplit
+from sklearn.metrics import mean_absolute_percentage_error, make_scorer
+from sklearn.base import BaseEstimator
+import numpy as np
 
 import typer
 from loguru import logger
 from tqdm import tqdm
 
 from stock_forecasting.config import MODELS_DIR, PROCESSED_DATA_DIR
+from stock_forecasting.features import WaveletTransformer
 
 app = typer.Typer()
 
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
+class CustomTimeSeriesSplit(BaseCrossValidator):
+    def __init__(self, n_splits=5, train_size=None):
+        self.n_splits = n_splits
+        self.train_size = train_size
+
+    def split(self, X, y=None, groups=None):
+        # Check that the input data is at least of the required size
+        n_samples = len(X)
+
+        if self.train_size is None:
+            self.train_size = n_samples // (self.n_splits + 1)
+
+        # Ensure we have enough samples to perform the split
+        if n_samples <= self.train_size * self.n_splits:
+            raise ValueError("The number of samples is too small for the number of splits.")
+
+        # Generate the splits
+        for i in range(self.n_splits):
+            train_end = self.train_size * (i + 1)  # The end of the training set
+            test_start = train_end  # The start of the test set
+
+            if test_start + self.train_size > n_samples:
+                test_start = n_samples - self.train_size
+
+            train_indices = np.arange(train_end)
+            test_indices = np.arange(test_start, min(test_start + self.train_size, n_samples))
+
+            yield train_indices, test_indices
+
+    def get_n_splits(self, X=None, y=None, groups=None):
+        return self.n_splits
+
+
+def cross_validate(
+    classifier: BaseEstimator,
+    param_distributions: Sequence[Mapping] | Mapping,
+    n_iter: int = 10,
+    n_splits: int = 5,
     features_path: Path = PROCESSED_DATA_DIR / "features.csv",
     labels_path: Path = PROCESSED_DATA_DIR / "labels.csv",
     model_path: Path = MODELS_DIR / "model.pkl",
-    # -----------------------------------------
 ):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Training some model...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Modeling training complete.")
-    # -----------------------------------------
+    # TODO: load real data
+    X, y = make_regression(n_samples=100, n_features=100, n_targets=1)
+
+    pipeline = Pipeline(
+        [
+            ("preprocessing", StandardScaler()),
+            ("wavelet", WaveletTransformer()),
+            ("classifier", classifier),
+        ]
+    )
+
+    cv = CustomTimeSeriesSplit(n_splits=n_splits)
+    search = RandomizedSearchCV(
+        pipeline,
+        param_distributions=param_distributions,
+        n_iter=n_iter,
+        cv=cv,
+        scoring=make_scorer(
+            mean_absolute_percentage_error
+        ),  # TODO: we will probably need a custom score
+    ).fit(X, y)
+
+    logger.info("Best score:", search.best_score_)
+    return search
 
 
 if __name__ == "__main__":

@@ -1,10 +1,80 @@
 
+# Decisoes:
+
+## Quais stocks usar?
+- Filtrar ações com base em critérios como liquidez, desempenho histórico ou previsões de retorno.
+- eliminar ações com baixa liquidez ou alto ruído
+- Limitar o número de ações (50 ou 100 ativos deve ser bom)
+
+## Como lidar com anomalias (tipo covid)
+
+## Que features usar?
+- usar a diferença de preços de cada dia?
+- wavelet transform
+- rolling avg (para a tendencia e talvez racio com o close price) em varias janelas - n vi em nenhum paper mas parece fazer sentido
+- vamos considerar dividendos no cálculo do retorno total do portfólio? Se não, acho que podemos excluir "Dividends"
+- será que "Stock Splits" é relevante? Usar os splits como um possível indicador, como data de referência para mudanças no comportamento do preço
+- macroeconomic variables
+- preço do dolar/euro/etc
+
+
+## Como vai ser a previsao?
+- que modelos usar? Random forest regressor VS SVR VS XGBoost VS LSTM VS etc - lembrar de nao usar 2 algoritmos em arvore
+- em vez de prever o open e close prices prever a variação (open - close) - isto foi invensão do Pedro (escrevi mais em baixo)
+- classificação (se sobe ou desce) VS regressão (quanto sobe e desce)
+- prever varios dias de uma vez ou só um dia à frente (um dia parece melhor?)
+- para um dia de cada vez o dia 2 pode usar o verdadeiro valor do dia 1? (acho que não)
+
+## Métricas de Avaliação previsão:
+- Mean absolute percentage error (MAPE)
+- correlation coefficient (R)
+- Theil’s inequality coefficient (Theil U)
+
+
+## Otimização do portfolio
+- monte-carlo VS genetico VS Modelo de Markowitz
+- Markowitz deve ser o mais simples mas não é "machine learning" 
+
+
+### Para Modelo de Markowitz
+- Aplique métodos robustos para estimativa de entradas, como shrinkage ou otimização bayesiana
+- Em vez de minimizar apenas o risco (variância), utilize métricas como o Sharpe Ratio (retorno ajustado ao risco) para balancear melhor risco e retorno em horizontes curtos
+- Considere incluir ativos com alta liquidez ou estratégias de hedge para proteger o portfólio contra movimentos bruscos no curto prazo
+- Limite a alocação máxima em qualquer ativo a 10% para evitar concentração excessiva
+
+## Métricas de Avaliação portfolio
+- Sharpe Ratio: Retorno ajustado ao risco.
+- Cumulative Return: Retorno acumulado ao longo do tempo.
+- Drawdown: Perda máxima observada
+
+-------------------------------------------------------------------------------------------------------------------------
+
 https://pmc.ncbi.nlm.nih.gov/articles/PMC5510866/
 WT(wavelet) is considered to fix the noise feature of financial time series. It is a widely used technique for filtering and mining single-dimensional signals [23–25].
 
 For each stock index, three types of variables are used as model inputs. The first set is historical stock trading data, such as the Open, High, Low and Close price (OHLC) [26–28], and the second is the technical indicators of stock trading. These are commonly used inputs in previous studies [29]. Apart from these, we also introduce the macroeconomic variables as the third type of inputs. As the macro economy can hugely influence stock markets and the advantage of our deep learning model is the ability to extract abstract and invariant features from input variables[30, 31], we believe the addition of macroeconomic variables could improve the model performance.
 
 we evaluate the model’s performance from two dimensions: predictive accuracy and profitability. The predictive accuracy is evaluated by using three measurements: Mean absolute percentage error (MAPE), correlation coefficient (R) and Theil’s inequality coefficient (Theil U)
+
+https://en.wikipedia.org/wiki/List_of_S%26P_500_companies
+
+--------------------------------------------------------------------------------------------------------------------------
+
+# Ideia do pedro q talvez faça sentido:
+em vez de prever o open e close prices prever a variação (open - close)
+
+chat gpt aprova
+
+Log Returns:
+- Instead of raw differences, you could use the log return: log⁡(P_t/P_(t−1)).
+- Advantages: Log returns are scale-independent, and their distribution is closer to normal, which is useful for many statistical and machine learning models.
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Para otimização do portfolio:
+- Mean-Variance Optimization (Modelo de Markowitz) - n sei se é considerado IA
+TODO: heurísticas de busca para restrições adicionais
+
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -51,3 +121,31 @@ Monte Monte_Carlo_Methods_In_Financial_Engineering - Book
     Why We Use It: In time-series analysis, like forecasting stock prices, path dependency reflects real-world scenarios where future prices are influenced by past trends. Understanding path-dependent dynamics helps in creating models that account for cumulative effects over time.
     Financial Application: Even though your project may not involve options, the concept of path dependency is relevant. For instance, stock forecasts might rely on past price data patterns, not just recent data. This section’s approach to handling complex dependencies can help improve your forecasting model’s realism and responsiveness to historical patterns.
 
+
+--------------------------------------------------------------------------------------------
+--------------------------------BOB-was-here------------------------------------------------
+--------------------------------------------------------------------------------------------
+LG08->
+    The multiobjective hybrid genetic algorithm:  is a specific type of computational approach that uses 
+                                                    genetic algorithms—a type of algorithm inspired by 
+                                                    natural selection.
+                                                    The "multiobjective" part indicates that it tries to optimize
+                                                    multiple goals at once, while "hybrid" implies it combines 
+                                                    different methods or techniques to improve its performance.
+
+                                                  mohGA aims to maintain a diverse set of solutions, 
+                                                  offering different trade-offs across objectives. 
+                                                  This way, decision-makers can choose the best solution 
+                                                  based on their priorities
+
+                                                  combines genetic algorithms with other optimization techniques
+
+
+                                                  optimizing for multiple goals simultaneously, 
+                                                  such as maximizing returns, 
+                                                  minimizing risk, 
+                                                  and improving prediction accuracy
+
+
+
+    particularly useful for fields that require strategic resource planning and optimization
