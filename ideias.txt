@@ -21,8 +21,7 @@
 ## Como vai ser a previsao?
 - que modelos usar? Random forest regressor VS SVR VS XGBoost VS LSTM VS etc - lembrar de nao usar 2 algoritmos em arvore
 - em vez de prever o open e close prices prever a variação (open - close) - isto foi invensão do Pedro (escrevi mais em baixo)
-- classificação (se sobe ou desce) VS regressão (quanto sobe e desce)
-- prever varios dias de uma vez ou só um dia à frente (um dia parece melhor?)
+- prever varios dias de uma vez ou só um dia à frente (um dia parece melhor?): vai ser uma semana
 - para um dia de cada vez o dia 2 pode usar o verdadeiro valor do dia 1? (acho que não)
 
 ## Métricas de Avaliação previsão:
