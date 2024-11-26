@@ -1,12 +1,40 @@
 from pathlib import Path
+from typing import List
+import pandas as pd
 
 import typer
 from loguru import logger
 from tqdm import tqdm
 
-from .config import FIGURES_DIR, PROCESSED_DATA_DIR
+from .config import FIGURES_DIR, PROCESSED_DATA_DIR, CONFIG
 
 app = typer.Typer()
+
+
+def plot_stock_stats(stats: pd.DataFrame):
+    conf = CONFIG["stock_filter"]
+
+    # Remove S&P 500 itself
+    stats = stats.drop("^GSPC")
+
+    # Plot
+    ax = stats.plot(
+        kind="bar",
+        subplots=True,
+        layout=(2, 2),
+        title="Stock Stats",
+        figsize=(18, 8),
+        logy=True,
+        legend=False,
+        xticks=[],
+    )
+
+    # Add horizontal lines with the limits
+    ax[0][0].axhline(y=conf["min_mean_volume"], color="red", linestyle=":", linewidth=2)
+    ax[0][1].axhline(y=conf["min_mean_dollar_volume"], color="red", linestyle=":", linewidth=2)
+    ax[1][0].axhline(y=conf["min_annual_return"], color="red", linestyle=":", linewidth=2)
+    ax[1][1].axhline(y=conf["min_annual_volatility"], color="red", linestyle=":", linewidth=2)
+    ax[1][1].axhline(y=conf["max_annual_volatility"], color="red", linestyle=":", linewidth=2)
 
 
 @app.command()

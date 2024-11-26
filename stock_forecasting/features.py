@@ -2,20 +2,14 @@ from pathlib import Path
 from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
 import pandas as pd
+from typing import Tuple
 
 import typer
 from loguru import logger
 from tqdm import tqdm
 
-from .config import PROCESSED_DATA_DIR, RAW_DATA_DIR, CONFIG, PROCESSED_DATA_DIR
-from .utils import wavelet_transform, waveletSmooth
-
-MIN_MEAN_VOLUME = 500_000
-MIN_MEAN_DOLLAR_VOLUME = 10_000_000
-
-MIN_ANNUAL_RETURN = 0.05
-MIN_ANNUAL_VOLATILITY = 0.1
-MAX_ANNUAL_VOLATILITY = 0.5
+from .config import CONFIG
+from .utils import waveletSmooth
 
 app = typer.Typer()
 
@@ -55,12 +49,18 @@ class WaveletTransformer(BaseEstimator, TransformerMixin):
             return X_test_WT
 
 
-@app.command()
-def filter_stocks(
-    input_path: Path = RAW_DATA_DIR / "raw.pkl",
-    output_path: Path = RAW_DATA_DIR / "raw_filtered.pkl",
-):
-    data: pd.DataFrame = pd.read_pickle(input_path)
+def delete_recent(data: pd.DataFrame, threshold: int) -> pd.DataFrame:
+    # Filter new stocks
+    na_count = data.iloc[threshold].isna().groupby(level=0).sum()
+    to_remove = na_count[na_count != 0].index
+
+    data = data.drop(columns=to_remove, level=0)
+    data.columns = data.columns.remove_unused_levels()
+    return data
+
+
+def calculate_stock_stats(data: pd.DataFrame) -> pd.DataFrame:
+    data = data.copy(deep=False)
 
     # Calculate mean daily volume
     for ticker in data.columns.levels[0]:
@@ -68,10 +68,6 @@ def filter_stocks(
 
     mean_volume = data.xs("Volume", level="Price", axis=1).mean()
     mean_dollar_volume = data.xs("Dollar_Volume", level="Price", axis=1).mean()
-
-    # Filter by liquity
-    liquid_assets = mean_volume > MIN_MEAN_VOLUME  # Volume > 500,000
-    liquid_dollar_assets = mean_dollar_volume > MIN_MEAN_DOLLAR_VOLUME  # $10M
 
     # Cumulative return (1 year, adjusted for 252 working days)
     for ticker in data.columns.levels[0]:
@@ -83,11 +79,29 @@ def filter_stocks(
     # Historical volatility (annualized standard deviation)
     annual_volatility = data.xs("Daily_Return", level="Price", axis=1).std() * (252**0.5)
 
+    return pd.DataFrame(
+        {
+            "mean_volume": mean_volume,
+            "mean_dollar_volume": mean_dollar_volume,
+            "annual_return": annual_return,
+            "annual_volatility": annual_volatility,
+        },
+        index=data.columns.levels[0],
+    )
+
+
+def filter_stocks(data: pd.DataFrame, stock_stats: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Index]:
+    conf = CONFIG["stock_filter"]
+
+    # Filter by liquity
+    liquid_assets = stock_stats["mean_volume"] > conf["min_mean_volume"]
+    liquid_dollar_assets = stock_stats["mean_dollar_volume"] > conf["min_mean_dollar_volume"]
+
     # Filter by return and volatility
-    performing_assets = annual_return > MIN_ANNUAL_RETURN  # Return > 5%
-    stable_assets = (annual_volatility > MIN_ANNUAL_VOLATILITY) & (
-        annual_volatility < MAX_ANNUAL_VOLATILITY
-    )  # Vol > 10%, < 50%
+    performing_assets = stock_stats["annual_return"] > conf["min_annual_return"]
+    stable_assets = (stock_stats["annual_volatility"] > conf["min_annual_volatility"]) & (
+        stock_stats["annual_volatility"] < conf["max_annual_volatility"]
+    )
 
     filtered = liquid_assets & liquid_dollar_assets & performing_assets & stable_assets
 
@@ -97,17 +111,16 @@ def filter_stocks(
     # Update dataframe columns
     data_filtered.columns = data_filtered.columns.remove_unused_levels()
 
-    data_filtered.to_pickle(output_path)
+    return data_filtered, categories_to_drop
 
 
-@app.command()
-def add_features(
-    input_path: Path = RAW_DATA_DIR / "raw_filtered.pkl",
-    output_path: Path = PROCESSED_DATA_DIR / "extra_features.pkl",
-):
-    data_all: pd.DataFrame = pd.read_pickle(input_path)
+def extract_features(data_all: pd.DataFrame):
+    data_all = data_all.copy(deep=False)
 
-    horizons = [2, 5, 60, 250, 1000]
+    # horizons = [2, 5, 60, 250, 1000]
+    horizons = [2, 5, 60, 250]
+
+    new_features = {}
 
     for ticker in data_all.columns.levels[0]:
         # Add target column
@@ -117,15 +130,28 @@ def add_features(
 
         # Add horizon features
         for horizon in horizons:
-            rolling_avg = data.rolling(horizon).mean()
+            rolling_avg = data["Close"].rolling(horizon).mean()
 
             ratio_column = f"Close_Ratio_{horizon}"
-            data_all[(ticker, ratio_column)] = data["Close"] / rolling_avg["Close"]
+            new_features[(ticker, ratio_column)] = data["Close"] / rolling_avg
 
             trend_column = f"Trend_{horizon}"
-            data_all[(ticker, trend_column)] = data.shift(1).rolling(horizon).sum()["Target"]
+            new_features[(ticker, trend_column)] = data["Target"].shift(1).rolling(horizon).mean()
 
-    data_all.to_pickle(output_path)
+    df = pd.DataFrame(new_features)
+
+    # Set multi-level column names (optional, if not already tuples)
+    df.columns = pd.MultiIndex.from_tuples(df.columns, names=["Ticker", "Price"])
+
+    return pd.concat(
+        [
+            df,
+            data_all.xs("Target", level="Price", axis=1, drop_level=False),
+        ],
+        axis=1,
+    )
+
+    return data_all
 
 
 if __name__ == "__main__":
