@@ -151,8 +151,6 @@ def extract_features(data_all: pd.DataFrame):
         axis=1,
     )
 
-    return data_all
-
 
 if __name__ == "__main__":
     app()
