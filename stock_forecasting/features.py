@@ -132,11 +132,13 @@ def extract_features(data_all: pd.DataFrame):
         for horizon in horizons:
             rolling_avg = data["Close"].rolling(horizon).mean()
 
+            # How much the close price has changed compared to previous days
             ratio_column = f"Close_Ratio_{horizon}"
             new_features[(ticker, ratio_column)] = data["Close"] / rolling_avg
 
+            # How much the price went up in the previous days
             trend_column = f"Trend_{horizon}"
-            new_features[(ticker, trend_column)] = data["Target"].shift(1).rolling(horizon).mean()
+            new_features[(ticker, trend_column)] = data["Target"].shift(1).rolling(horizon).sum()
 
     df = pd.DataFrame(new_features)
 
