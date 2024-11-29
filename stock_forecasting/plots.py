@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import List
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 import typer
 from loguru import logger
@@ -35,6 +36,27 @@ def plot_stock_stats(stats: pd.DataFrame):
     ax[1][0].axhline(y=conf["min_annual_return"], color="red", linestyle=":", linewidth=2)
     ax[1][1].axhline(y=conf["min_annual_volatility"], color="red", linestyle=":", linewidth=2)
     ax[1][1].axhline(y=conf["max_annual_volatility"], color="red", linestyle=":", linewidth=2)
+
+
+def pairplot(df: pd.DataFrame):
+    # Add a 'color' column based on the normalized target
+    df = df.copy(deep=False)
+    df.loc[:, "color"] = df["Next_Target"]
+
+    # Pairplot with custom coloring
+    pairplot = sns.pairplot(
+        df,
+        hue="color",
+        plot_kws={"alpha": 0.8, "s": 50, "edgecolor": "k", "linewidth": 0.5},  # Point properties
+        diag_kws={"hue": None, "color": ".3"},
+        diag_kind="hist",
+        palette=None,
+    )
+
+    pairplot.add_legend()
+
+    # Show the plot
+    plt.suptitle("Pairplot of features", y=1.02)
 
 
 @app.command()
