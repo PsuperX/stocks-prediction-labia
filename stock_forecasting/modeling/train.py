@@ -26,6 +26,7 @@ from stock_forecasting.features import WaveletTransformer
 app = typer.Typer()
 
 
+# Adapted from https://www.tensorflow.org/tutorials/structured_data/time_series
 class WindowGenerator:
     def __init__(
         self,
@@ -36,6 +37,7 @@ class WindowGenerator:
         val_df: pd.DataFrame = None,
         test_df: pd.DataFrame = None,
         label_columns: list = None,
+        feature_columns: list = None,
     ):
         # Store the raw data.
         self.train_df = train_df
@@ -46,6 +48,7 @@ class WindowGenerator:
         self.label_columns = label_columns
         if label_columns is not None:
             self.label_columns_indices = {name: i for i, name in enumerate(label_columns)}
+        self.feature_columns = feature_columns
         self.column_indices = {name: i for i, name in enumerate(train_df.columns)}
 
         # Work out the window parameters.
@@ -75,6 +78,10 @@ class WindowGenerator:
     def split_window(self, features):
         inputs = features[self.input_slice, :]
         labels = features[self.labels_slice, :]
+        if self.feature_columns is not None:
+            inputs = tf.stack(
+                [inputs[:, self.column_indices[name]] for name in self.feature_columns], axis=-1
+            )
         if self.label_columns is not None:
             labels = tf.stack(
                 [labels[:, self.column_indices[name]] for name in self.label_columns], axis=-1
@@ -149,12 +156,14 @@ class WindowGenerator:
 
         ds = ds.map(self.split_window)
 
+        # Turn labels to dictionaries for multi-task training
         labels_as_dict = lambda features, labels: (
             features,
             {name[0].replace("^", "."): labels[:, i] for i, name in enumerate(self.label_columns)},
         )
         ds = ds.map(labels_as_dict)
 
+        # This speeds-up stuff
         ds = ds.cache().shuffle(1000).batch(32).prefetch(tf.data.AUTOTUNE)
 
         return ds
@@ -183,9 +192,12 @@ class WindowGenerator:
         return result
 
 
-def compile_and_fit(model: Model, window: WindowGenerator, epochs: int = 20, patience: int = 2):
+def compile_and_fit(model: Model, window: WindowGenerator, epochs: int = 20, patience: int = 10):
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss", patience=patience, mode="min"
+    )
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss", factor=0.2, patience=patience
     )
 
     model.compile(
@@ -196,7 +208,10 @@ def compile_and_fit(model: Model, window: WindowGenerator, epochs: int = 20, pat
     # model.summary()
 
     history = model.fit(
-        window.train, epochs=epochs, validation_data=window.val, callbacks=[early_stopping]
+        window.train,
+        epochs=epochs,
+        validation_data=window.val,
+        callbacks=[early_stopping, reduce_lr],
     )
     return history
 
@@ -208,6 +223,7 @@ def train_lstm(
     out_steps: int = 5,  # How many days to predict
     epochs: int = 20,
 ):
+    # Create time windows
     multi_window = WindowGenerator(
         input_width=input_width,
         label_width=out_steps,
@@ -217,12 +233,14 @@ def train_lstm(
         label_columns=[(ticker, "Target") for ticker in train_df.columns.levels[0]],
     )
 
+    # Create shared network
     inputs = layers.Input(shape=(input_width, len(train_df.columns)))
 
     x = layers.LSTM(100, activation="relu", return_sequences=True)(inputs)
     x = layers.LSTM(100, activation="relu")(x)
     shared = layers.Dense(100, activation="relu")(x)
 
+    # Create a head for each stock
     outputs = []
     for name in train_df.columns.levels[0]:
         x = layers.Dense(100, activation="relu")(shared)
@@ -230,10 +248,18 @@ def train_lstm(
         x = layers.Dense(out_steps, name=name.replace("^", "."))(x)
         outputs.append(x)
 
+    # Combine all networks
     model = Model(inputs=inputs, outputs=outputs)
 
+    # Train the model
     history = compile_and_fit(model, multi_window, epochs=epochs, patience=10)
     return history, multi_window
+
+
+# TODO: test this
+def predict(model: Model, window: WindowGenerator):
+    pred = model.predict(window.test)
+    return pd.DataFrame(pred.numpy(), columns=window.label_columns, index=window.test_df.index)
 
 
 if __name__ == "__main__":

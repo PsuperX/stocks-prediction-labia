@@ -1,5 +1,9 @@
 from pathlib import Path
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import RobustScaler
+from sklearn.linear_model import Lasso
+from sklearn.feature_selection import RFE
 import numpy as np
 import pandas as pd
 from typing import Tuple
@@ -114,7 +118,7 @@ def filter_stocks(data: pd.DataFrame, stock_stats: pd.DataFrame) -> Tuple[pd.Dat
     return data_filtered, categories_to_drop
 
 
-def extract_features(data_all: pd.DataFrame):
+def extract_features(data_all: pd.DataFrame) -> pd.DataFrame:
     data_all = data_all.copy(deep=False)
 
     # horizons = [2, 5, 60, 250, 1000]
@@ -152,6 +156,40 @@ def extract_features(data_all: pd.DataFrame):
         ],
         axis=1,
     )
+
+
+def feature_selection(
+    df: pd.DataFrame, min_features_to_select: int, step: int, verbose: bool = False
+) -> Tuple[pd.DataFrame, Pipeline]:
+    clf = Lasso(alpha=0.1)
+    feature_selector = RFE(
+        estimator=clf,
+        step=step,
+        n_features_to_select=min_features_to_select,
+        verbose=verbose,
+    )
+
+    pipeline = Pipeline(
+        [
+            ("normalize", RobustScaler()),
+            ("feature_selection", feature_selector),
+        ],
+        verbose=verbose,
+    )
+
+    y = df.xs("Target", level="Price", axis=1).shift(-1).dropna()  # Predicting next day's price
+    X = df.iloc[:-1]  # Drop the last row of X to align with y
+
+    pipeline.fit(X, y)
+
+    # Filter selected features
+    selected_features = pipeline["feature_selection"].support_
+    new_df = df.iloc[:, selected_features]
+
+    # Update dataframe columns
+    new_df.columns = new_df.columns.remove_unused_levels()
+
+    return new_df, pipeline
 
 
 if __name__ == "__main__":
