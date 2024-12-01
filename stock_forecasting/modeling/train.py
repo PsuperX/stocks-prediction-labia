@@ -7,7 +7,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import BaseCrossValidator, RandomizedSearchCV
 from stock_forecasting.features import WaveletTransformer
 from sklearn.metrics import mean_absolute_percentage_error, make_scorer
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.preprocessing import RobustScaler
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -100,7 +101,7 @@ class WindowGenerator:
         plot_col_index = self.column_indices[plot_col]
         max_n = min(max_subplots, len(inputs))
         for n in range(max_n):
-            plt.subplot(max_n, 1, n + 1)
+            axs = plt.subplot(max_n, 1, n + 1)
             plt.ylabel(f"{plot_col[0]} [normed]")
             plt.plot(
                 self.input_indices,
@@ -109,6 +110,8 @@ class WindowGenerator:
                 marker=".",
                 zorder=-10,
             )
+            for ax in axs:
+                ax.axhline(y=0, color="red", linewidth=2)
 
             if self.label_columns:
                 label_col_index = self.label_columns_indices.get(plot_col, None)
@@ -143,13 +146,13 @@ class WindowGenerator:
 
         plt.xlabel("Time [h]")
 
-    def make_dataset(self, data):
+    def make_dataset(self, data, sequence_stride: int = 1):
         data = np.array(data, dtype=np.float32)
         ds = tf.keras.utils.timeseries_dataset_from_array(
             data=data,
             targets=None,
             sequence_length=self.total_window_size,
-            sequence_stride=1,
+            sequence_stride=sequence_stride,
             shuffle=False,
             batch_size=None,
         )
@@ -178,7 +181,7 @@ class WindowGenerator:
 
     @property
     def test(self):
-        return self.make_dataset(self.test_df)
+        return self.make_dataset(self.test_df, sequence_stride=self.label_width)
 
     @property
     def example(self):
@@ -257,9 +260,37 @@ def train_lstm(
 
 
 # TODO: test this
-def predict(model: Model, window: WindowGenerator):
+def predict(
+    model: Model, window: WindowGenerator, true_prices: pd.DataFrame, scaler: RobustScaler
+) -> pd.DataFrame:
+    # Predict on test data
+    # predictions are percentage change
     pred = model.predict(window.test)
-    return pd.DataFrame(pred.numpy(), columns=window.label_columns, index=window.test_df.index)
+
+    # Reshape predictions
+    pred = np.array(pred)
+    pred = pred.reshape(-1, pred.shape[0])
+
+    # Undo scaling
+    pred = scaler.inverse_transform(pred)
+
+    pred = pd.DataFrame(
+        pred,
+        columns=[ticker for ticker, _ in window.label_columns],
+        index=window.test_df.index[window.input_width :],
+    )
+
+    # Calculate predicted close price
+    orig = true_prices.sort_index(axis=1)
+    result = np.zeros_like(orig)
+    for i in range(0, len(orig), 5):
+        prev = orig.iloc[i]
+        for j in range(5):
+            result[i + j] = prev * (1 + pred.iloc[i + j])
+            prev = result[i + j]
+
+    result = pd.DataFrame(result, columns=pred.columns, index=pred.index)
+    return result
 
 
 if __name__ == "__main__":
