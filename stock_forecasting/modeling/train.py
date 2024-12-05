@@ -95,13 +95,13 @@ class WindowGenerator:
 
         return inputs, labels
 
-    def plot(self, model=None, plot_col="T (degC)", max_subplots=3):
+    def plot(self, model=None, plot_col=("A", "Target"), max_subplots=3):
         inputs, labels = self.example
         plt.figure(figsize=(12, 8))
         plot_col_index = self.column_indices[plot_col]
         max_n = min(max_subplots, len(inputs))
         for n in range(max_n):
-            axs = plt.subplot(max_n, 1, n + 1)
+            ax = plt.subplot(max_n, 1, n + 1)
             plt.ylabel(f"{plot_col[0]} [normed]")
             plt.plot(
                 self.input_indices,
@@ -110,8 +110,7 @@ class WindowGenerator:
                 marker=".",
                 zorder=-10,
             )
-            for ax in axs:
-                ax.axhline(y=0, color="red", linewidth=2)
+            ax.axhline(y=0, color="red", linestyle=":", linewidth=2)
 
             if self.label_columns:
                 label_col_index = self.label_columns_indices.get(plot_col, None)
@@ -220,24 +219,12 @@ def compile_and_fit(model: Model, window: WindowGenerator, epochs: int = 20, pat
 
 
 def train_lstm(
+    multi_window: WindowGenerator,
     train_df: pd.DataFrame,
-    val_df: pd.DataFrame,
-    input_width: int = 10,  # How many days of context
-    out_steps: int = 5,  # How many days to predict
     epochs: int = 20,
 ):
-    # Create time windows
-    multi_window = WindowGenerator(
-        input_width=input_width,
-        label_width=out_steps,
-        shift=out_steps,
-        train_df=train_df,
-        val_df=val_df,
-        label_columns=[(ticker, "Target") for ticker in train_df.columns.levels[0]],
-    )
-
     # Create shared network
-    inputs = layers.Input(shape=(input_width, len(train_df.columns)))
+    inputs = layers.Input(shape=(multi_window.input_width, len(train_df.columns)))
 
     x = layers.LSTM(100, activation="relu", return_sequences=True)(inputs)
     x = layers.LSTM(100, activation="relu")(x)
@@ -248,7 +235,7 @@ def train_lstm(
     for name in train_df.columns.levels[0]:
         x = layers.Dense(100, activation="relu")(shared)
         x = layers.Dropout(0.5)(x)
-        x = layers.Dense(out_steps, name=name.replace("^", "."))(x)
+        x = layers.Dense(multi_window.label_width, name=name.replace("^", "."))(x)
         outputs.append(x)
 
     # Combine all networks
@@ -256,10 +243,9 @@ def train_lstm(
 
     # Train the model
     history = compile_and_fit(model, multi_window, epochs=epochs, patience=10)
-    return history, multi_window
+    return history
 
 
-# TODO: test this
 def predict(
     model: Model, window: WindowGenerator, true_prices: pd.DataFrame, scaler: RobustScaler
 ) -> pd.DataFrame:
@@ -286,11 +272,46 @@ def predict(
     for i in range(0, len(orig), 5):
         prev = orig.iloc[i]
         for j in range(5):
+            if i + j >= len(result):
+                break
             result[i + j] = prev * (1 + pred.iloc[i + j])
             prev = result[i + j]
 
     result = pd.DataFrame(result, columns=pred.columns, index=pred.index)
     return result
+
+
+def evaluate_last_baseline(window: WindowGenerator):
+    # Layer that always predicts the last value
+    class MultiStepLastBaseline(tf.keras.Model):
+        def __init__(self, label_index, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.label_index = label_index
+
+        def call(self, inputs):
+            return tf.tile(inputs[:, -1:, self.label_index], [1, window.label_width])
+
+    # Create shared inputs
+    inputs = layers.Input(shape=(window.input_width, len(window.train_df.columns)))
+
+    # Create a head for each stock
+    outputs = []
+    for name in window.train_df.columns.levels[0]:
+        x = MultiStepLastBaseline(
+            window.column_indices[(name, "Target")], name=name.replace("^", ".")
+        )(inputs)
+        outputs.append(x)
+
+    # Combine all networks
+    baseline = Model(inputs=inputs, outputs=outputs)
+    baseline.compile(
+        loss=tf.keras.losses.MeanSquaredError(),
+        metrics={name[0].replace("^", "."): ["mae"] for name in window.label_columns},
+    )
+
+    # Evaluate
+    baseline_results = baseline.evaluate(window.test, verbose=0, return_dict=True)
+    return baseline, baseline_results
 
 
 if __name__ == "__main__":

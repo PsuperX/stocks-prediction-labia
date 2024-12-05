@@ -120,7 +120,7 @@ def filter_stocks(data: pd.DataFrame, stock_stats: pd.DataFrame) -> Tuple[pd.Dat
 
 def calculate_rsi(data: pd.DataFrame) -> pd.Series:
     # Calculate price changes
-    delta = data["Close"].diff()
+    delta = data["Target"].diff()
 
     # Separate gains and losses
     gain = (delta.where(delta > 0, 0)).rolling(window=12).mean()
@@ -160,7 +160,7 @@ def extract_features(data_all: pd.DataFrame) -> pd.DataFrame:
             trend_column = f"Trend_{horizon}"
             new_features[(ticker, trend_column)] = data["Target"].shift(1).rolling(horizon).sum()
 
-        new_features[(ticker, "EMA")] = data["Close"].ewm(span=12, adjust=False).mean()
+        new_features[(ticker, "EMA")] = data["Target"].ewm(span=12, adjust=False).mean()
         new_features[(ticker, "RSI")] = calculate_rsi(data)
 
     df = pd.DataFrame(new_features)
