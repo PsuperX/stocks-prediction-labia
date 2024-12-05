@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Optional
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.datasets import make_regression
@@ -15,6 +15,9 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
+from tensorflow.keras import regularizers
+from dataclasses import dataclass
+import pickle
 
 
 import typer
@@ -195,107 +198,139 @@ class WindowGenerator:
         return result
 
 
-def compile_and_fit(
-    model: Model,
-    window: WindowGenerator,
-    epochs: int = 20,
-    patience: int = 10,
-    verbose: int = "auto",
-):
-    # Callbacks
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor="val_loss", patience=patience, mode="min"
-    )
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor="val_loss", factor=0.2, patience=patience
-    )
-    checkpoint_filepath = MODELS_DIR / "best_so_far.keras"
-    model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_filepath,
-        monitor="val_loss",
-        mode="max",
-        save_best_only=True,
-    )
+@dataclass
+class LSTMManager:
+    window: WindowGenerator
+    settings: dict
+    test_number: int
 
-    model.compile(
-        loss={name[0].replace("^", "."): "mse" for name in window.label_columns},
-        optimizer=tf.keras.optimizers.Adam(),
-        metrics={name[0].replace("^", "."): ["mae"] for name in window.label_columns},
-    )
-    # model.summary()
+    def fit_model(
+        self,
+        model: Model,
+        epochs: int = 20,
+        patience: int = 10,
+        verbose: int = "auto",
+    ):
+        # Callbacks
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor="val_loss", patience=patience, mode="min", restore_best_weights=True
+        )
+        reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss", factor=0.2, patience=patience
+        )
+        checkpoint_filepath = MODELS_DIR / f"test{self.test_number}" / "best_so_far.keras"
+        model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=checkpoint_filepath,
+            monitor="val_loss",
+            mode="max",
+            save_best_only=True,
+        )
 
-    history = model.fit(
-        window.train,
-        epochs=epochs,
-        validation_data=window.val,
-        callbacks=[early_stopping, reduce_lr, model_checkpoint_callback],
-        verbose=verbose,
-    )
-    return history
+        # Fit
+        history = model.fit(
+            self.window.train,
+            epochs=epochs,
+            validation_data=self.window.val,
+            callbacks=[early_stopping, reduce_lr, model_checkpoint_callback],
+            verbose=verbose,
+        )
+        with open(MODELS_DIR / f"test{self.test_number}" / "history.pkl"):
+            pickle.dump(history)
+        return history
 
+    def train_lstm(
+        self,
+        epochs: int = 20,
+        verbose: int = "auto",
+    ):
+        # Create shared network
+        inputs = layers.Input(shape=(self.window.input_width, len(self.window.train_df.columns)))
 
-def train_lstm(
-    multi_window: WindowGenerator,
-    epochs: int = 20,
-    verbose: int = "auto",
-):
-    # Create shared network
-    inputs = layers.Input(shape=(multi_window.input_width, len(multi_window.train_df.columns)))
+        x = layers.LSTM(self.settings["lstm_sizes"][0], return_sequences=True)(inputs)
+        for size in self.settings["lstm_sizes"][1:-1]:
+            x = layers.LSTM(size, return_sequences=True)(x)
+        x = layers.LSTM(self.settings["lstm_sizes"][-1])(x)
+        x = layers.Dropout(self.settings["dropout"])(x)
+        shared = layers.Dense(
+            self.settings["shared_dense"],
+            activation="relu",
+            kernel_regularizer=regularizers.l2(self.settings["l2"]),
+        )(x)
 
-    x = layers.LSTM(128, return_sequences=True)(inputs)
-    x = layers.LSTM(128)(x)
-    x = layers.Dropout(0.5)(x)
-    shared = layers.Dense(100, activation="relu")(x)
+        # Create a head for each stock
+        outputs = []
+        for name in self.window.train_df.columns.levels[0]:
+            x = layers.Dense(
+                size, activation="relu", kernel_regularizer=regularizers.l2(self.settings["l2"])
+            )(shared)
+            x = layers.Dropout(self.settings["dropout"])(x)
+            for size in self.settings["per_stock_sizes"][1:]:
+                x = layers.Dense(
+                    size,
+                    activation="relu",
+                    kernel_regularizer=regularizers.l2(self.settings["l2"]),
+                )(x)
+                x = layers.Dropout(self.settings["dropout"])(x)
+            x = layers.Dense(self.window.label_width, name=name.replace("^", "."))(x)
+            outputs.append(x)
 
-    # Create a head for each stock
-    outputs = []
-    for name in multi_window.train_df.columns.levels[0]:
-        x = layers.Dense(50, activation="relu")(shared)
-        x = layers.Dropout(0.5)(x)
-        x = layers.Dense(multi_window.label_width, name=name.replace("^", "."))(x)
-        outputs.append(x)
+        # Combine all networks
+        model = Model(inputs=inputs, outputs=outputs)
 
-    # Combine all networks
-    model = Model(inputs=inputs, outputs=outputs)
+        model.compile(
+            loss={name[0].replace("^", "."): "mse" for name in self.window.label_columns},
+            optimizer=tf.keras.optimizers.Adam(),
+            metrics={name[0].replace("^", "."): ["mae"] for name in self.window.label_columns},
+        )
+        # model.summary()
 
-    # Train the model
-    history = compile_and_fit(model, multi_window, epochs=epochs, patience=10, verbose=verbose)
-    return history
+        # Train the model
+        history = self.fit_model(model, epochs=epochs, patience=10, verbose=verbose)
+        return history
 
+    def predict(
+        self,
+        model: Model,
+        true_prices: pd.DataFrame,
+        scaler: RobustScaler,
+    ) -> pd.DataFrame:
+        # Predict on test data
+        # predictions are percentage change
+        pred = model.predict(self.window.test)
 
-def predict(
-    model: Model, window: WindowGenerator, true_prices: pd.DataFrame, scaler: RobustScaler
-) -> pd.DataFrame:
-    # Predict on test data
-    # predictions are percentage change
-    pred = model.predict(window.test)
+        # Reshape predictions
+        pred = np.array(pred)
+        pred = pred.reshape(-1, pred.shape[0])
 
-    # Reshape predictions
-    pred = np.array(pred)
-    pred = pred.reshape(-1, pred.shape[0])
+        # Undo scaling
+        pred = scaler.inverse_transform(pred)
 
-    # Undo scaling
-    pred = scaler.inverse_transform(pred)
+        pred = pd.DataFrame(
+            pred,
+            columns=[ticker for ticker, _ in self.window.label_columns],
+            index=self.window.test_df.index[self.window.input_width :],
+        )
 
-    pred = pd.DataFrame(
-        pred,
-        columns=[ticker for ticker, _ in window.label_columns],
-        index=window.test_df.index[window.input_width :],
-    )
+        # Calculate predicted close price
+        orig = true_prices.sort_index(axis=1)
+        result = np.zeros_like(orig)
+        for i in range(0, len(orig), 5):
+            prev = orig.iloc[i]
+            for j in range(5):
+                if i + j >= len(result):
+                    break
+                result[i + j] = prev * (1 + pred.iloc[i + j])
+                prev = result[i + j]
 
-    # Calculate predicted close price
-    orig = true_prices.sort_index(axis=1)
-    result = np.zeros_like(orig)
-    for i in range(0, len(orig), 5):
-        prev = orig.iloc[i]
-        for j in range(5):
-            if i + j >= len(result):
-                break
-            result[i + j] = prev * (1 + pred.iloc[i + j])
-            prev = result[i + j]
+        result = pd.DataFrame(result, columns=pred.columns, index=pred.index)
+        return result
 
-    result = pd.DataFrame(result, columns=pred.columns, index=pred.index)
-    return result
+    @property
+    def best_model(self) -> Optional[Model]:
+        path = MODELS_DIR / f"test{self.test_number}" / "best_so_far.keras"
+        if path.exists():
+            return tf.keras.models.load_model(path)
+        return None
 
 
 def evaluate_last_baseline(window: WindowGenerator):

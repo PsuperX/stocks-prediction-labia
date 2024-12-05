@@ -68,6 +68,14 @@ def plot_feature_ranking(df: pd.DataFrame, pipeline: Pipeline):
     df.plot(kind="bar", title="Ranking of features with RFE\n(Lasso)", figsize=(17, 10), xticks=[])
 
 
+def plot_loss(history: dict, title: str = "Losses"):
+    # Test 1 results
+    plt.plot(history["loss"], label="Train loss")
+    plt.plot(history["val_loss"], label="Test loss")
+    plt.title(title)
+    plt.legend()
+
+
 @app.command()
 def main(
     # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
