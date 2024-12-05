@@ -78,7 +78,7 @@ six==1.16.0
 soupsieve==2.6
 stack-data==0.6.3
 statsmodels==0.14.4
--e git+ssh://git@github.com/PsuperX/stocks-prediction-labia.git@ac0d9e356f647008f086a7368a0ddd94a6c25559#egg=stock_forecasting
+#-e git+ssh://git@github.com/PsuperX/stocks-prediction-labia.git@ac0d9e356f647008f086a7368a0ddd94a6c25559#egg=stock_forecasting
 tensorboard==2.18.0
 tensorboard-data-server==0.7.2
 tensorflow==2.18.0
