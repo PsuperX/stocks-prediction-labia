@@ -2,6 +2,7 @@ from pathlib import Path
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.pipeline import Pipeline
 
 import typer
 from loguru import logger
@@ -57,6 +58,14 @@ def pairplot(df: pd.DataFrame):
 
     # Show the plot
     plt.suptitle("Pairplot of features", y=1.02)
+
+
+def plot_feature_ranking(df: pd.DataFrame, pipeline: Pipeline):
+    ranking = pipeline["feature_selection"].ranking_
+
+    df = pd.Series(ranking, index=df.columns)
+    df = df.xs("Target", level="Price", axis=0)
+    df.plot(kind="bar", title="Ranking of features with RFE\n(Lasso)", figsize=(17, 10), xticks=[])
 
 
 @app.command()

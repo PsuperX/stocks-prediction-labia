@@ -76,6 +76,7 @@ class WindowGenerator:
             ]
         )
 
+    @tf.function
     def split_window(self, features):
         inputs = features[self.input_slice, :]
         labels = features[self.labels_slice, :]
@@ -194,12 +195,26 @@ class WindowGenerator:
         return result
 
 
-def compile_and_fit(model: Model, window: WindowGenerator, epochs: int = 20, patience: int = 10):
+def compile_and_fit(
+    model: Model,
+    window: WindowGenerator,
+    epochs: int = 20,
+    patience: int = 10,
+    verbose: int = "auto",
+):
+    # Callbacks
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss", patience=patience, mode="min"
     )
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
         monitor="val_loss", factor=0.2, patience=patience
+    )
+    checkpoint_filepath = MODELS_DIR / "best_so_far.keras"
+    model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_filepath,
+        monitor="val_loss",
+        mode="max",
+        save_best_only=True,
     )
 
     model.compile(
@@ -213,27 +228,29 @@ def compile_and_fit(model: Model, window: WindowGenerator, epochs: int = 20, pat
         window.train,
         epochs=epochs,
         validation_data=window.val,
-        callbacks=[early_stopping, reduce_lr],
+        callbacks=[early_stopping, reduce_lr, model_checkpoint_callback],
+        verbose=verbose,
     )
     return history
 
 
 def train_lstm(
     multi_window: WindowGenerator,
-    train_df: pd.DataFrame,
     epochs: int = 20,
+    verbose: int = "auto",
 ):
     # Create shared network
-    inputs = layers.Input(shape=(multi_window.input_width, len(train_df.columns)))
+    inputs = layers.Input(shape=(multi_window.input_width, len(multi_window.train_df.columns)))
 
-    x = layers.LSTM(100, activation="relu", return_sequences=True)(inputs)
-    x = layers.LSTM(100, activation="relu")(x)
+    x = layers.LSTM(128, return_sequences=True)(inputs)
+    x = layers.LSTM(128)(x)
+    x = layers.Dropout(0.5)(x)
     shared = layers.Dense(100, activation="relu")(x)
 
     # Create a head for each stock
     outputs = []
-    for name in train_df.columns.levels[0]:
-        x = layers.Dense(100, activation="relu")(shared)
+    for name in multi_window.train_df.columns.levels[0]:
+        x = layers.Dense(50, activation="relu")(shared)
         x = layers.Dropout(0.5)(x)
         x = layers.Dense(multi_window.label_width, name=name.replace("^", "."))(x)
         outputs.append(x)
@@ -242,7 +259,7 @@ def train_lstm(
     model = Model(inputs=inputs, outputs=outputs)
 
     # Train the model
-    history = compile_and_fit(model, multi_window, epochs=epochs, patience=10)
+    history = compile_and_fit(model, multi_window, epochs=epochs, patience=10, verbose=verbose)
     return history
 
 

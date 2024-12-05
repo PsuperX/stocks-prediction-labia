@@ -3,7 +3,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import Lasso
-from sklearn.feature_selection import RFE
+from sklearn.feature_selection import RFE, RFECV
+from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
 import pandas as pd
 from typing import Tuple
@@ -185,6 +186,44 @@ def feature_selection(
         estimator=clf,
         step=step,
         n_features_to_select=min_features_to_select,
+        verbose=verbose,
+    )
+
+    pipeline = Pipeline(
+        [
+            ("normalize", RobustScaler()),
+            ("feature_selection", feature_selector),
+        ],
+        verbose=verbose,
+    )
+
+    y = df.xs("Target", level="Price", axis=1).shift(-1).dropna()  # Predicting next day's price
+    X = df.iloc[:-1]  # Drop the last row of X to align with y
+
+    pipeline.fit(X, y)
+
+    # Filter selected features
+    selected_features = pipeline["feature_selection"].support_
+    new_df = df.iloc[:, selected_features]
+
+    # Update dataframe columns
+    new_df.columns = new_df.columns.remove_unused_levels()
+
+    return new_df, pipeline
+
+
+def feature_selection2(
+    df: pd.DataFrame, min_features_to_select: int, step: int, verbose: bool = False
+) -> Tuple[pd.DataFrame, Pipeline]:
+    clf = Lasso(alpha=0.1)
+    cv = TimeSeriesSplit(n_splits=3)
+    feature_selector = RFECV(
+        estimator=clf,
+        step=step,
+        min_features_to_select=min_features_to_select,
+        cv=cv,
+        scoring="r2",
+        n_jobs=-1,
         verbose=verbose,
     )
 
