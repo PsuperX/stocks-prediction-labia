@@ -68,6 +68,21 @@ def plot_feature_ranking(df: pd.DataFrame, pipeline: Pipeline):
     df.plot(kind="bar", title="Ranking of features with RFE\n(Lasso)", figsize=(17, 10), xticks=[])
 
 
+def plot_rfecv_results(pipeline: Pipeline):
+    cv_results = pd.DataFrame(pipeline["feature_selection"].cv_results_)
+
+    plt.figure()
+    plt.xlabel("Number of features selected")
+    plt.ylabel("Mean r2 score")
+    plt.errorbar(
+        x=cv_results["n_features"],
+        y=cv_results["mean_test_score"],
+        yerr=cv_results["std_test_score"],
+    )
+    plt.title("Recursive Feature Elimination \nwith correlated features")
+    plt.show()
+
+
 def plot_loss(history: dict, title: str = "Losses"):
     # Test 1 results
     plt.plot(history["loss"], label="Train loss")

@@ -288,6 +288,12 @@ class LSTMManager:
         history = self.fit_model(model, epochs=epochs, patience=10, verbose=verbose)
         return history
 
+    def plot_predictions(self, model: Model = None, plot_col=("COST", "Target")):
+        if model:
+            self.window.plot(model=model, plot_col=plot_col)
+        else:
+            self.window.plot(model=self.best_model, plot_col=plot_col)
+
     def predict(
         self,
         model: Model,

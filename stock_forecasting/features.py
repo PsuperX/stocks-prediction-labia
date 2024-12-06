@@ -2,7 +2,8 @@ from pathlib import Path
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
-from sklearn.linear_model import Lasso
+from sklearn.linear_model import Lasso, ElasticNet
+from sklearn.decomposition import PCA
 from sklearn.feature_selection import RFE, RFECV
 from sklearn.model_selection import TimeSeriesSplit
 import numpy as np
@@ -121,7 +122,7 @@ def filter_stocks(data: pd.DataFrame, stock_stats: pd.DataFrame) -> Tuple[pd.Dat
 
 def calculate_rsi(data: pd.DataFrame) -> pd.Series:
     # Calculate price changes
-    delta = data["Target"].diff()
+    delta = data.diff()
 
     # Separate gains and losses
     gain = (delta.where(delta > 0, 0)).rolling(window=12).mean()
@@ -162,7 +163,7 @@ def extract_features(data_all: pd.DataFrame) -> pd.DataFrame:
             new_features[(ticker, trend_column)] = data["Target"].shift(1).rolling(horizon).sum()
 
         new_features[(ticker, "EMA")] = data["Target"].ewm(span=12, adjust=False).mean()
-        new_features[(ticker, "RSI")] = calculate_rsi(data)
+        new_features[(ticker, "RSI")] = calculate_rsi(data["Target"])
 
     df = pd.DataFrame(new_features)
 
@@ -178,7 +179,7 @@ def extract_features(data_all: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def feature_selection(
+def rfe_feature_selection(
     df: pd.DataFrame, min_features_to_select: int, step: int, verbose: bool = False
 ) -> Tuple[pd.DataFrame, Pipeline]:
     clf = Lasso(alpha=0.1)
@@ -189,33 +190,16 @@ def feature_selection(
         verbose=verbose,
     )
 
-    pipeline = Pipeline(
-        [
-            ("normalize", RobustScaler()),
-            ("feature_selection", feature_selector),
-        ],
-        verbose=verbose,
-    )
-
-    y = df.xs("Target", level="Price", axis=1).shift(-1).dropna()  # Predicting next day's price
-    X = df.iloc[:-1]  # Drop the last row of X to align with y
-
-    pipeline.fit(X, y)
-
-    # Filter selected features
-    selected_features = pipeline["feature_selection"].support_
-    new_df = df.iloc[:, selected_features]
-
-    # Update dataframe columns
-    new_df.columns = new_df.columns.remove_unused_levels()
-
-    return new_df, pipeline
+    return feature_selection(df, feature_selector, verbose)
 
 
-def feature_selection2(
-    df: pd.DataFrame, min_features_to_select: int, step: int, verbose: bool = False
+def rfecv_feature_selection(
+    df: pd.DataFrame,
+    clf: BaseEstimator,
+    min_features_to_select: int,
+    step: int,
+    verbose: bool = False,
 ) -> Tuple[pd.DataFrame, Pipeline]:
-    clf = Lasso(alpha=0.1)
     cv = TimeSeriesSplit(n_splits=3)
     feature_selector = RFECV(
         estimator=clf,
@@ -227,6 +211,36 @@ def feature_selection2(
         verbose=verbose,
     )
 
+    return feature_selection(df, feature_selector, verbose)
+
+
+def pca_feature_selection(
+    df: pd.DataFrame,
+    n_components: int,
+    verbose: bool = False,
+) -> Tuple[pd.DataFrame, Pipeline]:
+    pca = PCA(n_components=n_components, random_state=42)
+    pipeline = Pipeline(
+        [
+            ("normalize", RobustScaler()),
+            ("feature_selection", pca),
+        ],
+        verbose=verbose,
+    )
+
+    y = df.xs("Target", level="Price", axis=1).shift(-1).dropna()  # Predicting next day's price
+    X = df.iloc[:-1]  # Drop the last row of X to align with y
+
+    new_df = pipeline.fit_transform(X, y)
+
+    return new_df, pipeline
+
+
+def feature_selection(
+    df: pd.DataFrame,
+    feature_selector: BaseEstimator,
+    verbose: bool = False,
+) -> Tuple[pd.DataFrame, Pipeline]:
     pipeline = Pipeline(
         [
             ("normalize", RobustScaler()),
