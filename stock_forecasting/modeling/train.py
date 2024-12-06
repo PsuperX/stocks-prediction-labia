@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Mapping, Sequence, Optional
+from typing import Mapping, Sequence, Optional, Tuple
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.datasets import make_regression
@@ -170,7 +170,7 @@ class WindowGenerator:
         ds = ds.map(labels_as_dict)
 
         # This speeds-up stuff
-        ds = ds.cache().shuffle(1000).batch(32).prefetch(tf.data.AUTOTUNE)
+        ds = ds.shuffle(1000).batch(32).prefetch(tf.data.AUTOTUNE)
 
         return ds
 
@@ -337,6 +337,44 @@ class LSTMManager:
         if path.exists():
             return tf.keras.models.load_model(path)
         return None
+
+
+def prepare_data(
+    df: pd.DataFrame,
+    validation_size: float,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, RobustScaler]:
+    # Train-Test split
+    train_df = df[df.index < "2024-01-01"]
+    test_df = df[df.index >= "2023-12-15"]
+
+    # Train-Val split
+    train_size = int(len(train_df) * (1 - validation_size))
+    val_df = train_df.iloc[train_size:]
+    train_df = train_df.iloc[:train_size]
+
+    # Normalize data
+    scaler = RobustScaler()
+    scaler.set_output(transform="pandas")
+
+    # Fit on train data
+    columns = train_df.columns
+    train_df = scaler.fit_transform(train_df)
+    train_df.columns = columns
+
+    # Transform validation data
+    columns = val_df.columns
+    val_df = scaler.transform(val_df)
+    val_df.columns = columns
+
+    # Transform test data
+    label_scaler = RobustScaler()
+    label_scaler.fit(test_df.xs("Target", level="Price", axis=1))
+
+    columns = test_df.columns
+    test_df = scaler.transform(test_df)
+    test_df.columns = columns
+
+    return train_df, val_df, test_df, label_scaler
 
 
 def evaluate_last_baseline(window: WindowGenerator):
