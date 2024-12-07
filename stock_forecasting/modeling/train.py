@@ -18,6 +18,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras import regularizers
 from dataclasses import dataclass
 import pickle
+import os
 
 
 import typer
@@ -80,10 +81,10 @@ class WindowGenerator:
         )
 
     @tf.function
-    def split_window(self, features):
+    def split_window(self, features, filter_features: bool = True):
         inputs = features[self.input_slice, :]
         labels = features[self.labels_slice, :]
-        if self.feature_columns is not None:
+        if self.feature_columns is not None and filter_features:
             inputs = tf.stack(
                 [inputs[:, self.column_indices[name]] for name in self.feature_columns], axis=-1
             )
@@ -114,7 +115,7 @@ class WindowGenerator:
                 marker=".",
                 zorder=-10,
             )
-            ax.axhline(y=0, color="red", linestyle=":", linewidth=2)
+            ax.axhline(y=0, color="red", linestyle=":", linewidth=1)
 
             if self.label_columns:
                 label_col_index = self.label_columns_indices.get(plot_col, None)
@@ -133,7 +134,11 @@ class WindowGenerator:
                 s=64,
             )
             if model is not None:
-                predictions = model(inputs)
+                inputs_filtered = tf.stack(
+                    [inputs[:, :, self.column_indices[name]] for name in self.feature_columns],
+                    axis=-1,
+                )
+                predictions = model(inputs_filtered)
                 plt.scatter(
                     self.label_indices,
                     predictions[label_col_index][n, :],
@@ -149,7 +154,7 @@ class WindowGenerator:
 
         plt.xlabel("Time [h]")
 
-    def make_dataset(self, data, sequence_stride: int = 1):
+    def make_dataset(self, data, sequence_stride: int = 1, filter_features: bool = True):
         data = np.array(data, dtype=np.float32)
         ds = tf.keras.utils.timeseries_dataset_from_array(
             data=data,
@@ -160,7 +165,7 @@ class WindowGenerator:
             batch_size=None,
         )
 
-        ds = ds.map(self.split_window)
+        ds = ds.map(lambda x: self.split_window(x, filter_features))
 
         # Turn labels to dictionaries for multi-task training
         labels_as_dict = lambda features, labels: (
@@ -170,7 +175,7 @@ class WindowGenerator:
         ds = ds.map(labels_as_dict)
 
         # This speeds-up stuff
-        ds = ds.shuffle(1000).batch(32).prefetch(tf.data.AUTOTUNE)
+        ds = ds.cache().shuffle(1000).batch(32).prefetch(tf.data.AUTOTUNE)
 
         return ds
 
@@ -192,7 +197,7 @@ class WindowGenerator:
         result = getattr(self, "_example", None)
         if result is None:
             # No example batch was found, so get one from the `.train` dataset
-            result = next(iter(self.train))
+            result = next(iter(self.make_dataset(self.train_df, filter_features=False)))
             # And cache it for next time
             self._example = result
         return result
@@ -234,8 +239,9 @@ class LSTMManager:
             callbacks=[early_stopping, reduce_lr, model_checkpoint_callback],
             verbose=verbose,
         )
-        with open(MODELS_DIR / f"test{self.test_number}" / "history.pkl"):
-            pickle.dump(history)
+        os.makedirs(MODELS_DIR / f"test{self.test_number}", exist_ok=True)
+        with open(MODELS_DIR / f"test{self.test_number}" / "history.pkl", "wb") as f:
+            pickle.dump(history, f)
         return history
 
     def train_lstm(
@@ -244,7 +250,7 @@ class LSTMManager:
         verbose: int = "auto",
     ):
         # Create shared network
-        inputs = layers.Input(shape=(self.window.input_width, len(self.window.train_df.columns)))
+        inputs = layers.Input(shape=(self.window.input_width, len(self.window.feature_columns)))
 
         x = layers.LSTM(self.settings["lstm_sizes"][0], return_sequences=True)(inputs)
         for size in self.settings["lstm_sizes"][1:-1]:
@@ -261,7 +267,9 @@ class LSTMManager:
         outputs = []
         for name in self.window.train_df.columns.levels[0]:
             x = layers.Dense(
-                size, activation="relu", kernel_regularizer=regularizers.l2(self.settings["l2"])
+                self.settings["per_stock_sizes"][0],
+                activation="relu",
+                kernel_regularizer=regularizers.l2(self.settings["l2"]),
             )(shared)
             x = layers.Dropout(self.settings["dropout"])(x)
             for size in self.settings["per_stock_sizes"][1:]:
@@ -280,7 +288,9 @@ class LSTMManager:
         model.compile(
             loss={name[0].replace("^", "."): "mse" for name in self.window.label_columns},
             optimizer=tf.keras.optimizers.Adam(),
-            metrics={name[0].replace("^", "."): ["mae"] for name in self.window.label_columns},
+            metrics={
+                name[0].replace("^", "."): ["mse", "R2Score"] for name in self.window.label_columns
+            },
         )
         # model.summary()
 
@@ -289,10 +299,10 @@ class LSTMManager:
         return history
 
     def plot_predictions(self, model: Model = None, plot_col=("COST", "Target")):
-        if model:
-            self.window.plot(model=model, plot_col=plot_col)
-        else:
+        if model is None:
             self.window.plot(model=self.best_model, plot_col=plot_col)
+        else:
+            self.window.plot(model=model, plot_col=plot_col)
 
     def predict(
         self,
