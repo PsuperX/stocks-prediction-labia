@@ -91,6 +91,55 @@ def plot_loss(history: dict, title: str = "Losses"):
     plt.legend()
 
 
+def plot_multi_task_history(history):
+    # Extract data from history
+    history_dict = history.history
+
+    # Get the train/val loss
+    train_loss = history_dict.get("loss", [])
+    val_loss = history_dict.get("val_loss", [])
+
+    # Get the MSE for all tasks, assuming 'mse_task1', 'mse_task2', etc., are in the history
+    task_mse = [key for key in history_dict.keys() if "mse" in key]
+    task_mse_values = {task: history_dict[task] for task in task_mse}
+
+    # Get the R² score for all tasks, assuming 'r2_task1', 'r2_task2', etc., are in the history
+    task_r2 = [key for key in history_dict.keys() if "R2" in key]
+    task_r2_values = {task: history_dict[task] for task in task_r2}
+
+    # Create a figure with subplots
+    fig, axs = plt.subplots(3, 1, figsize=(12, 18))
+
+    # Plot train vs validation loss
+    axs[0].plot(train_loss, label="Train Loss")
+    axs[0].plot(val_loss, label="Validation Loss", linestyle="--")
+    axs[0].set_title("Train vs Validation Loss")
+    axs[0].set_xlabel("Epochs")
+    axs[0].set_ylabel("Loss")
+    axs[0].legend()
+    print(train_loss)
+
+    # Plot MSE for all tasks
+    for task, mse_values in task_mse_values.items():
+        axs[1].plot(mse_values, label=task)
+    axs[1].set_title("Mean Squared Error (MSE) for All Tasks")
+    axs[1].set_xlabel("Epochs")
+    axs[1].set_ylabel("MSE")
+    # axs[1].legend()
+
+    # Plot R² score for all tasks
+    for task, r2_values in task_r2_values.items():
+        axs[2].plot(r2_values, label=task)
+    axs[2].set_title("R² Score for All Tasks")
+    axs[2].set_xlabel("Epochs")
+    axs[2].set_ylabel("R² Score")
+    # axs[2].legend()
+
+    # Adjust layout and show the plots
+    plt.tight_layout()
+    plt.show()
+
+
 @app.command()
 def main(
     # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
