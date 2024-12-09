@@ -232,10 +232,12 @@ class LSTMManager:
         )
 
         # Fit
+        train = self.window.train
+        val = self.window.val
         history = model.fit(
-            self.window.train,
+            train,
             epochs=epochs,
-            validation_data=self.window.val,
+            validation_data=val,
             callbacks=[early_stopping, reduce_lr, model_checkpoint_callback],
             verbose=verbose,
         )
@@ -287,7 +289,7 @@ class LSTMManager:
 
         model.compile(
             loss={name[0].replace("^", "."): "mse" for name in self.window.label_columns},
-            optimizer=tf.keras.optimizers.Adam(),
+            optimizer=tf.keras.optimizers.Adam(self.settings["lr"]),
             metrics={
                 name[0].replace("^", "."): ["mse", "R2Score"] for name in self.window.label_columns
             },
