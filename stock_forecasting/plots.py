@@ -100,11 +100,11 @@ def plot_multi_task_history(history):
     val_loss = history_dict.get("val_loss", [])
 
     # Get the MSE for all tasks, assuming 'mse_task1', 'mse_task2', etc., are in the history
-    task_mse = [key for key in history_dict.keys() if "mse" in key]
+    task_mse = [key for key in history_dict.keys() if "mse" in key and "val" in key]
     task_mse_values = {task: history_dict[task] for task in task_mse}
 
     # Get the R² score for all tasks, assuming 'r2_task1', 'r2_task2', etc., are in the history
-    task_r2 = [key for key in history_dict.keys() if "R2" in key]
+    task_r2 = [key for key in history_dict.keys() if "R2" in key and "val" in key]
     task_r2_values = {task: history_dict[task] for task in task_r2}
 
     # Create a figure with subplots
@@ -117,7 +117,6 @@ def plot_multi_task_history(history):
     axs[0].set_xlabel("Epochs")
     axs[0].set_ylabel("Loss")
     axs[0].legend()
-    print(train_loss)
 
     # Plot MSE for all tasks
     for task, mse_values in task_mse_values.items():
