@@ -1,5 +1,6 @@
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
@@ -9,6 +10,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from .config import FIGURES_DIR, PROCESSED_DATA_DIR, CONFIG
+from .utils import waveletSmooth, wavelet_transform
 
 app = typer.Typer()
 
@@ -100,11 +102,11 @@ def plot_multi_task_history(history):
     val_loss = history_dict.get("val_loss", [])
 
     # Get the MSE for all tasks, assuming 'mse_task1', 'mse_task2', etc., are in the history
-    task_mse = [key for key in history_dict.keys() if "mse" in key]
+    task_mse = [key for key in history_dict.keys() if "mse" in key and "val" in key]
     task_mse_values = {task: history_dict[task] for task in task_mse}
 
     # Get the R² score for all tasks, assuming 'r2_task1', 'r2_task2', etc., are in the history
-    task_r2 = [key for key in history_dict.keys() if "R2" in key]
+    task_r2 = [key for key in history_dict.keys() if "R2" in key and "val" in key]
     task_r2_values = {task: history_dict[task] for task in task_r2}
 
     # Create a figure with subplots
@@ -117,7 +119,6 @@ def plot_multi_task_history(history):
     axs[0].set_xlabel("Epochs")
     axs[0].set_ylabel("Loss")
     axs[0].legend()
-    print(train_loss)
 
     # Plot MSE for all tasks
     for task, mse_values in task_mse_values.items():
@@ -138,6 +139,19 @@ def plot_multi_task_history(history):
     # Adjust layout and show the plots
     plt.tight_layout()
     plt.show()
+
+
+def plot_wavelet(df: pd.DataFrame):
+    train = df.xs("Close", level="Price", axis=1).values[:100, :1]
+    test = df.xs("Close", level="Price", axis=1).values[100:150, :1]
+
+    denoised_train, denoised_test = wavelet_transform(train, test)
+    plt.figure(figsize=(14, 7))
+    plt.plot(df.xs("Close", level="Price", axis=1).iloc[:150, :1].values, label="Original")
+    plt.plot(np.arange(100), denoised_train, label="Denoised train")
+    plt.plot(np.arange(100, 150), denoised_test, label="Denoised test")
+    plt.legend()
+    plt.title("Wavelet transform")
 
 
 @app.command()

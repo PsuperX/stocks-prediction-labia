@@ -254,34 +254,41 @@ class LSTMManager:
         # Create shared network
         inputs = layers.Input(shape=(self.window.input_width, len(self.window.feature_columns)))
 
-        x = layers.LSTM(self.settings["lstm_sizes"][0], return_sequences=True)(inputs)
-        for size in self.settings["lstm_sizes"][1:-1]:
-            x = layers.LSTM(size, return_sequences=True)(x)
-        x = layers.LSTM(self.settings["lstm_sizes"][-1])(x)
-        x = layers.Dropout(self.settings["dropout"])(x)
-        shared = layers.Dense(
-            self.settings["shared_dense"],
-            activation="relu",
-            kernel_regularizer=regularizers.l2(self.settings["l2"]),
-        )(x)
+        if len(self.settings["lstm_sizes"]) >= 2 and self.settings["shared_dense"] != 0:
+            x = layers.LSTM(self.settings["lstm_sizes"][0], return_sequences=True)(inputs)
+            for size in self.settings["lstm_sizes"][1:-1]:
+                x = layers.LSTM(size, return_sequences=True)(x)
+            x = layers.LSTM(self.settings["lstm_sizes"][-1])(x)
+            x = layers.Dropout(self.settings["dropout"])(x)
+            shared = layers.Dense(
+                self.settings["shared_dense"],
+                activation="relu",
+                kernel_regularizer=regularizers.l2(self.settings["l2"]),
+            )(x)
+        else:
+            x = layers.LSTM(self.settings["lstm_sizes"][0])(inputs)
+            shared = layers.Dropout(self.settings["dropout"])(x)
 
         # Create a head for each stock
         outputs = []
         for name in self.window.train_df.columns.levels[0]:
-            x = layers.Dense(
-                self.settings["per_stock_sizes"][0],
-                activation="relu",
-                kernel_regularizer=regularizers.l2(self.settings["l2"]),
-            )(shared)
-            x = layers.Dropout(self.settings["dropout"])(x)
-            for size in self.settings["per_stock_sizes"][1:]:
+            if len(self.settings["per_stock_sizes"]) != 0:
                 x = layers.Dense(
-                    size,
+                    self.settings["per_stock_sizes"][0],
                     activation="relu",
                     kernel_regularizer=regularizers.l2(self.settings["l2"]),
-                )(x)
+                )(shared)
                 x = layers.Dropout(self.settings["dropout"])(x)
-            x = layers.Dense(self.window.label_width, name=name.replace("^", "."))(x)
+                for size in self.settings["per_stock_sizes"][1:]:
+                    x = layers.Dense(
+                        size,
+                        activation="relu",
+                        kernel_regularizer=regularizers.l2(self.settings["l2"]),
+                    )(x)
+                    x = layers.Dropout(self.settings["dropout"])(x)
+                x = layers.Dense(self.window.label_width, name=name.replace("^", "."))(x)
+            else:
+                x = layers.Dense(self.window.label_width, name=name.replace("^", "."))(shared)
             outputs.append(x)
 
         # Combine all networks
