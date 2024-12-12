@@ -1,5 +1,6 @@
 from pathlib import Path
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
@@ -9,6 +10,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from .config import FIGURES_DIR, PROCESSED_DATA_DIR, CONFIG
+from .utils import waveletSmooth, wavelet_transform
 
 app = typer.Typer()
 
@@ -137,6 +139,19 @@ def plot_multi_task_history(history):
     # Adjust layout and show the plots
     plt.tight_layout()
     plt.show()
+
+
+def plot_wavelet(df: pd.DataFrame):
+    train = df.xs("Close", level="Price", axis=1).values[:100, :1]
+    test = df.xs("Close", level="Price", axis=1).values[100:150, :1]
+
+    denoised_train, denoised_test = wavelet_transform(train, test)
+    plt.figure(figsize=(14, 7))
+    plt.plot(df.xs("Close", level="Price", axis=1).iloc[:150, :1].values, label="Original")
+    plt.plot(np.arange(100), denoised_train, label="Denoised train")
+    plt.plot(np.arange(100, 150), denoised_test, label="Denoised test")
+    plt.legend()
+    plt.title("Wavelet transform")
 
 
 @app.command()
