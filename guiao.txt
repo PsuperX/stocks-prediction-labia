@@ -99,7 +99,16 @@ TODO: devem faltar coisas mas estou cansado
 ines podes fazer isto pls?
 
 
+# MT Carlo
 
+-> foram usados os dados desde 2010 até 2023 para calcular a média e matriz de covariância
+-> foram simulados 5100 possíveis portfolios tendo em conta às previsões anteriormente calculadas
+
+-> como só tem em consideração ver como se deve destribuir o dinheiro no primeiro dia para garantir que
+depois maximiza o lucro no fim não aceita a possíbilidade de durante o mez mudar o portfólio
+
+-> ver para todos os dias mudânças de portfolio não é ideal, sendo que ver a melhor aposta para cada dia ocupa mt espaço e demora mt tempo a correr, alternativa
+-> dividir os 30 dias em 3 blocos de 10 dias consecutivos e fazer o monte carlo para cada um deles 
 
 
 
