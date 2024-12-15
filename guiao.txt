@@ -58,36 +58,31 @@ Antes disso criamos um baseline para podermos comparar com esses modelos mais co
 
 # LSTM
 
-LSTMs são bastante eficazes com dados sequenciais e conseguem capturar as dependências temporais nos movimentos dos preços das ações.
+Os preços das stocks influenciam-se mutuamente, e achámos que as previsões de stocks individuais poderiam beneficiar de informações sobre o comportamento de outras stocks.
 
-Como os preços das ações seguem padrões comuns e se influenciam mutuamente achamos que as previsões de stocks individuais poderiam beneficiar de informações sobre o comportamento de outros stocks.
-
-Assim decidimos usar Multi task learning que permite ao modelo aprender padrões comuns compartilhadas entre diferentes ações para melhorar as previsões individuais.
-
-Isso permite que o modelo capture correlações entre as ações e generalize melhor para o portfólio, melhorando as previsões para cada ação individual.
+Por isso, decidimos usar *Multi-Task Learning*, que permite ao modelo aprender padrões comuns, melhorando as previsões de cada stock individualmente.
 
 ---
 
-Começámos por comparar o uso de todas as features com aquelas selecionadas como mais importantes pelo RFE.
+Começámos por comparar o uso de todas as features com aquelas selecionadas como mais importantes pelo RFE. 
 
-Rapidamente percebemos que, ao remover essas features, conseguimos uma melhoria na performance do modelo.
+Concluímos que remover algumas features melhorava a performance do modelo.
 
-Fizemos varias tentativas com combinações de hyperparâmetros diferentes, mas o modelo não conseguiu aprender de forma eficaz, apresentando sempre previsões muito próximas de zero.
+Testámos várias combinações de hiperparâmetros, mas o modelo não conseguiu aprender de forma eficaz, apresentando sempre previsões muito próximas de zero.
 
-Suspeitamos que retirar a escala das features pudesse estar a eliminar informação importante, por isso decidimos recalcular as features sem recorrer a valores percentuais. No entanto, os resultados não foram satisfatórios.
-
----
-
-Outra suspeita que surgiu foi de como usamos todas as stocks como input, os modelos poderiam estar a ter dificuldades com a informações e sinais contraditorias.
-Para mitigar esse efeito mas tentar manter manter informações uteis entre varios stocks dividimos os stocks por setor e treinamos um LSTM separado para cada setor. Isto permitirá que o modelo se foque em grupos mais homogéneos, reduzindo o ruído e melhorando a sua capacidade de aprender padrões mais interessantes.
-
-Embora os resultados inicias fossem promissores quando introduzimos dropout para evitar overfitting as previções voltaram a estar proximas de 0.
+Suspeitámos que retirar a escala das features pudesse estar a eliminar informação importante, por isso recalculámos as features sem recorrer a valores percentuais. No entanto, os resultados não foram diferentes.
 
 ---
 
-Mesmo assim fizemos um ultimo treino mais longo com todos os dados ate jan 2024 e com os melhores hyperparametros mas os resultados foram os mesmos, tudo proximo de zero.
+Suspeitámos que incluir todas as stocks no input poderia criar sinais contraditórios. 
 
-Ainda sem uma boa explicação para este dilema recorrente fizemos um histograma com os pesos de algumas camadas e reparamos que grande parte delas tinha pesos mt proximos de zero, mesmo não usando regularização L2...
+Para mitigar este efeito, mas tentar manter informações úteis entre várias stocks, dividimos as stocks por setor e treinámos um LSTM separado para cada setor. Isto permitiria que o modelo se focasse em grupos mais homogéneos, reduzindo o ruído.
+
+Os resultados iniciais foram promissores, mas o problema voltou a acontecer.
+
+---
+
+Sem uma explicação clara para este dilema recorrente, fizemos um histograma com os pesos de algumas camadas e percebemos que grande parte deles estava muito próximo de zero, mesmo sem o uso de regularização L2.
 
 TODO: devem faltar coisas mas estou cansado
     ver mais coisas que tinhamos nas ideias.txt
@@ -113,11 +108,4 @@ Fazer mudanças diárias no portfólio não é ideal, pois requer muito espaço 
 Como alternativa, o mês foi dividido em 3 blocos consecutivos de 10 dias. 
 Em seguida, o método de Monte Carlo foi aplicado a cada bloco separadamente, permitindo uma otimização mais eficiente e prática ao 
 longo do mês
-
-
-
-# Conclusão:
-
-nao importa o quanto tu tentas vai sempre dar merda, por mais tempo que passes a pensar no assunto nunca vais conseguir entender oq raios aconteceu, motivo? quem precisa disso quando podes simplesmente ligar o foda-se e nao querer saber :D
-afinal assumir q problemas n existem é mt melhor e nao tem qualquer downside whatsoeverrrrrr ja q a lstm esta mt mais feliz q eu com os seus 0 fucks given
 
