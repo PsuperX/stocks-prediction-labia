@@ -101,15 +101,18 @@ ines podes fazer isto pls?
 
 # MT Carlo
 
--> foram usados os dados desde 2010 até 2023 para calcular a média e matriz de covariância
--> foram simulados 5100 possíveis portfolios tendo em conta às previsões anteriormente calculadas
 
--> como só tem em consideração ver como se deve destribuir o dinheiro no primeiro dia para garantir que
-depois maximiza o lucro no fim não aceita a possíbilidade de durante o mez mudar o portfólio
+para o calculo da media e matriz de covariancia Foram utilizados dados históricos de ações desde 2010 até 2023
+numa primeira parte foram simulados 5100 possíveis portfólios, considerando as previsões calculadas anteriormente,
+com o objetivo de identificar a melhor alocação inicial para maximizar os lucros ao fim de um mês.
+Este modelo considera apenas a distribuição inicial do capital no primeiro dia e não avalia mudanças no portfólio ao longo do mês.
+Isso significa que, mesmo se o mercado mudar, o portfólio não é ajustado.
 
--> ver para todos os dias mudânças de portfolio não é ideal, sendo que ver a melhor aposta para cada dia ocupa mt espaço e demora mt tempo a correr, alternativa
--> dividir os 30 dias em 3 blocos de 10 dias consecutivos e fazer o monte carlo para cada um deles 
-
+Fazer mudanças diárias no portfólio não é ideal, pois requer muito espaço para armazenamento e elevado tempo de processamento para
+ calcular a melhor configuração para cada dia
+Como alternativa, o mês foi dividido em 3 blocos consecutivos de 10 dias. 
+Em seguida, o método de Monte Carlo foi aplicado a cada bloco separadamente, permitindo uma otimização mais eficiente e prática ao 
+longo do mês
 
 
 
