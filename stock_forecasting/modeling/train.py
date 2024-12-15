@@ -134,10 +134,13 @@ class WindowGenerator:
                 s=64,
             )
             if model is not None:
-                inputs_filtered = tf.stack(
-                    [inputs[:, :, self.column_indices[name]] for name in self.feature_columns],
-                    axis=-1,
-                )
+                if self.feature_columns is not None:
+                    inputs_filtered = tf.stack(
+                        [inputs[:, :, self.column_indices[name]] for name in self.feature_columns],
+                        axis=-1,
+                    )
+                else:
+                    inputs_filtered = inputs
                 predictions = model(inputs_filtered)
                 plt.scatter(
                     self.label_indices,
@@ -406,7 +409,7 @@ def prepare_data(
     return train_df, val_df, test_df, label_scaler
 
 
-def evaluate_last_baseline(window: WindowGenerator):
+def evaluate_last_baseline(window: WindowGenerator) -> Tuple[Model, dict]:
     # Layer that always predicts the last value
     class MultiStepLastBaseline(tf.keras.Model):
         def __init__(self, label_index, *args, **kwargs):
@@ -431,7 +434,7 @@ def evaluate_last_baseline(window: WindowGenerator):
     baseline = Model(inputs=inputs, outputs=outputs)
     baseline.compile(
         loss=tf.keras.losses.MeanSquaredError(),
-        metrics={name[0].replace("^", "."): ["mae"] for name in window.label_columns},
+        metrics={name[0].replace("^", "."): ["mse", "R2Score"] for name in window.label_columns},
     )
 
     # Evaluate

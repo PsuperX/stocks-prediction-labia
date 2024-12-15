@@ -4,6 +4,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
+from tensorflow.keras.models import Model
 
 import typer
 from loguru import logger
@@ -154,20 +155,25 @@ def plot_wavelet(df: pd.DataFrame):
     plt.title("Wavelet transform")
 
 
-@app.command()
-def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    output_path: Path = FIGURES_DIR / "plot.png",
-    # -----------------------------------------
-):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Generating plot from data...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Plot generation complete.")
-    # -----------------------------------------
+def plot_model_weights(model: Model):
+    plt.figure(figsize=(10, 6))
+
+    # Loop through each layer and extract its weights
+    for layer in model.layers[100:110]:
+        # Get the weights of the layer (this will return a list of arrays for each layer)
+        weights = layer.get_weights()
+
+        # If weights exist for this layer, plot their histogram
+        if len(weights) > 0:
+            for w in weights:
+                w_flattened = w.flatten()
+                plt.hist(w_flattened, bins=50, alpha=0.5, label=f"{layer.name} weights")
+
+    plt.xlabel("Weight Value")
+    plt.ylabel("Frequency")
+    plt.title("Histogram of Weights in the Model")
+    plt.legend(loc="upper right")
+    plt.show()
 
 
 if __name__ == "__main__":
