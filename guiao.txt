@@ -1,0 +1,120 @@
+
+usamos os dados extraidos do yfinance
+
+começamos for fazer uma limpeza dos dados.
+filtramos os stocks usando criterios como quantidade de dados historicos, liquidez, returno anual, volatibilidade
+
+# Wavelet
+Inicialmente, considerámos usar a transformada wavelet para limpar os dados de séries temporais, mas após analisar tentativas de replicação do estudo "A deep learning framework for financial time series using stacked autoencoders and long-short term memory", que também aplicaram essa técnica, decidimos abandonar a ideia. As replicações indicaram problemas de data leakage, em que a wavelet poderia ter sido mal aplicada no estudo original estando a incluir informações futuras. Assim concluímos que a wavelet introduzia complexidade desnecessária e poderia afetar a performance de previsão.
+
+# Engenheiros das features
+Nós extraimos features a partir dos preços de fecho, com foco em incorporar informações temporais, como médias móveis, para capturar tendências e padrões ao longo do tempo.
+
+Alem disso utilizamos alterações percentuais em vez de diferenças de preços brutos de modo a remover informações de escala dos stocks
+
+Esperamos que esta abordagem ajude a mitigar o *overfitting*, impedindo que o modelo seja influenciado pelos valores absolutos das ações e o torne mais robusto para diferentes ações.
+
+As features escolhidas foram EMA e RSI de 12 dias, pois são inidicadores muito usados e são selecionados por defeito em plataformas com trading view. 
+
+Racio dos valores de fecho que mede como o preço de fecho de uma ação se compara à sua média móvel dos últimos 2, 5, 60, 250 dias.
+
+Trend_X representa a variação percentual acumulada no preço da ação nos últimos 2, 5, 60, 250 dias
+
+O objetivo das features é incorporar informações tanto do passado proximo como de tendencias a longo prazo
+
+# Feature selection
+Naturalmente muitas destas features apresentavam correlações relativamente altas entre si por isso decidimos usar tecnicas de feature selection para diminuir a correlação entre as features.
+
+Usamos Recursive Feature Elimination para criar um ranking das features. Concluimos que EMA, Trend_250, RSI e Close_ratio_250 foram as features mais importantes e as diferenças percentuais do preço diario foram de longe os menos importantes.
+
+----- n sei se devemos incluir isto no video
+A baixa importância do Target sugere que as features que criamos estão a extrair informações relevantes dos dados.
+
+Os indicacores EMA e RSI, mostram-se entre as mais importantes, reforçando a sua relevância na previsão de movimentos de mercado.
+
+Trend_250 e Close_Ratio_250 também foram das mais importantes provavelmente porque refletem tendências de longo prazo.
+
+No entanto, o fraco desempenho de Trend_2 e Close_Ratio_2 sugere que flutuações de curto prazo não são tão eficazes na previsão de preços.
+-----
+
+Depois usamos Recursive Feature Elimination com Cross-Validation que para alem do ranking das features tb seleciona o numero de features com melhor performance. Apesar de varias tentativas com settings e modelos diferentes a performance não mudava independentemente do numero de features selectionadas.
+
+Isto pode ter acontecido porque usamos modelos modelos como Lasso e ElasticNet que podem ter dificuldade em capturar padrões nos dados. 
+
+Experimentamos usar preditores mais poderosos mas infelizmente, não conseguimos completar este experiencia devido às altas exigências computacionais.
+
+O desempenho indiferente à seleção de features levantou algumas duvidas quanto aos resultados do RFE e a qualidade do seu ranking. 
+Sendo assim decidimos não usar as features selecionadas pelo RFECV já que a sua qualidade é questionavel.
+
+# Previsões
+
+Decidimos fazer previsões em intervalos de 5 dias para cada ticker. Repetindo este processo, conseguimos uma previsão para todo o mês de Janeiro de 2024.
+Esta abordagem garante que tomamos decisões de otimização ao longo de uma semana o que pode resultar em retornos maiores embora a previsão seja mais dificil.
+
+Vamos experimentar com 2 modelos diferentes: LSTMs e XGBoost
+
+# Baseline (se não houver tempo tirasse isto)
+Antes disso criamos um baseline para podermos comparar com esses modelos mais complexos que simplesmente prevê sempre o valor do ultimo dia.
+
+# LSTM
+
+LSTMs são bastante eficazes com dados sequenciais e conseguem capturar as dependências temporais nos movimentos dos preços das ações.
+
+Como os preços das ações seguem padrões comuns e se influenciam mutuamente achamos que as previsões de stocks individuais poderiam beneficiar de informações sobre o comportamento de outros stocks.
+
+Assim decidimos usar Multi task learning que permite ao modelo aprender padrões comuns compartilhadas entre diferentes ações para melhorar as previsões individuais.
+
+Isso permite que o modelo capture correlações entre as ações e generalize melhor para o portfólio, melhorando as previsões para cada ação individual.
+
+---
+
+Começámos por comparar o uso de todas as features com aquelas selecionadas como mais importantes pelo RFE.
+
+Rapidamente percebemos que, ao remover essas features, conseguimos uma melhoria na performance do modelo.
+
+Fizemos varias tentativas com combinações de hyperparâmetros diferentes, mas o modelo não conseguiu aprender de forma eficaz, apresentando sempre previsões muito próximas de zero.
+
+Suspeitamos que retirar a escala das features pudesse estar a eliminar informação importante, por isso decidimos recalcular as features sem recorrer a valores percentuais. No entanto, os resultados não foram satisfatórios.
+
+---
+
+Outra suspeita que surgiu foi de como usamos todas as stocks como input, os modelos poderiam estar a ter dificuldades com a informações e sinais contraditorias.
+Para mitigar esse efeito mas tentar manter manter informações uteis entre varios stocks dividimos os stocks por setor e treinamos um LSTM separado para cada setor. Isto permitirá que o modelo se foque em grupos mais homogéneos, reduzindo o ruído e melhorando a sua capacidade de aprender padrões mais interessantes.
+
+Embora os resultados inicias fossem promissores quando introduzimos dropout para evitar overfitting as previções voltaram a estar proximas de 0.
+
+---
+
+Mesmo assim fizemos um ultimo treino mais longo com todos os dados ate jan 2024 e com os melhores hyperparametros mas os resultados foram os mesmos, tudo proximo de zero.
+
+Ainda sem uma boa explicação para este dilema recorrente fizemos um histograma com os pesos de algumas camadas e reparamos que grande parte delas tinha pesos mt proximos de zero, mesmo não usando regularização L2...
+
+TODO: devem faltar coisas mas estou cansado
+    ver mais coisas que tinhamos nas ideias.txt
+    ver se nao nos esquecemos mais nada no pdf + pdf da aulad + email
+
+
+# XGBoost
+
+ines podes fazer isto pls?
+
+
+# MT Carlo
+
+-> foram usados os dados desde 2010 até 2023 para calcular a média e matriz de covariância
+-> foram simulados 5100 possíveis portfolios tendo em conta às previsões anteriormente calculadas
+
+-> como só tem em consideração ver como se deve destribuir o dinheiro no primeiro dia para garantir que
+depois maximiza o lucro no fim não aceita a possíbilidade de durante o mez mudar o portfólio
+
+-> ver para todos os dias mudânças de portfolio não é ideal, sendo que ver a melhor aposta para cada dia ocupa mt espaço e demora mt tempo a correr, alternativa
+-> dividir os 30 dias em 3 blocos de 10 dias consecutivos e fazer o monte carlo para cada um deles 
+
+
+
+
+# Conclusão:
+
+nao importa o quanto tu tentas vai sempre dar merda, por mais tempo que passes a pensar no assunto nunca vais conseguir entender oq raios aconteceu, motivo? quem precisa disso quando podes simplesmente ligar o foda-se e nao querer saber :D
+afinal assumir q problemas n existem é mt melhor e nao tem qualquer downside whatsoeverrrrrr ja q a lstm esta mt mais feliz q eu com os seus 0 fucks given
+

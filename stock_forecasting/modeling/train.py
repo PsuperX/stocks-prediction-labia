@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Mapping, Sequence, Optional, Tuple
+from typing import Mapping, Sequence, Optional, Tuple, Dict
 from sklearn.discriminant_analysis import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.datasets import make_regression
@@ -349,6 +349,16 @@ class LSTMManager:
 
         result = pd.DataFrame(result, columns=pred.columns, index=pred.index)
         return result
+
+    def evaluate(self, model: Model) -> Dict[str, float]:
+        results = model.evaluate(self.window.test, verbose=0, return_dict=True)
+
+        metrics = ["loss", "mse", "R2Score"]
+        for metric in metrics:
+            val = np.mean([results[k] for k, v in results.items() if metric in k])
+            print(f"mean {metric}: {val}")
+
+        return results
 
     @property
     def best_model(self) -> Optional[Model]:
